@@ -1,0 +1,32 @@
+vessel,name,shape,length_cm,width_cm,height_cm,dishes_using_it
+V01,Hammered rectangular tray (large),rect,46.5,30,NOT MEASURED,0
+V02,"Round pan, brass handles - MEDIUM",round,20,,NOT MEASURED,1
+V03,"Round pan, brass handles - SMALL",round,16,,NOT MEASURED,17
+V04,"Round pan, brass handles - MINI",round,14,,NOT MEASURED,9
+V05,"Round pan, plain",round,20,,NOT MEASURED,2
+V06,Round shallow bowl / deep plate,round,20,,NOT MEASURED,16
+V07,"Flat round plate, wide rim - SMALL",round,19,,NOT MEASURED,0
+V08,"Flat round plate, wide rim - LARGE",round,23,,NOT MEASURED,9
+V09,"Oval pan, brass handles - LARGE",oval,33,23,NOT MEASURED,10
+V10,"Oval pan, brass handles - MEDIUM",oval,28.5,18.5,NOT MEASURED,4
+V11,"Oval pan, brass handles - deep",oval,26,21,NOT MEASURED,0
+V12,"Oval pan, brass handles - SMALL",oval,20,14,NOT MEASURED,3
+V13,Hammered oval bowl - LARGE,oval,28.5,19.5,NOT MEASURED,2
+V14,Hammered oval bowl - SMALL,oval,23.5,16.5,NOT MEASURED,1
+V15,"Long rect tray, brass handles",rect,33,20,NOT MEASURED,10
+V16,"Long rect tray, plain",rect,33,18.5,NOT MEASURED,2
+V17,"Small rect tray, brass handles",rect,14.5,9.5,NOT MEASURED,5
+V18,Square steel plate - LARGE,rect,26,26,NOT MEASURED,5
+V19,Square steel plate - SMALL,rect,21,21,NOT MEASURED,3
+V20,Terracotta fakhara bowl,round,15.5,,NOT MEASURED,6
+V21,Round dip bowl,round,10.5,,NOT MEASURED,0
+V22,Small sauce cup,round,7,,NOT MEASURED,0
+V23,"Mini pan, brass handles",round,6.5,,NOT MEASURED,0
+V24,"Tabliyeh board, 8 recesses",round,53,,NOT MEASURED,2
+V25,Round wooden paddle board,round,29.5,,NOT MEASURED,11
+V26,Round wooden plate,round,21,,NOT MEASURED,0
+V27,Wood + marble board,rect,41,16,NOT MEASURED,0
+V28,"Wooden board, 3 recesses",rect,30,12.5,NOT MEASURED,0
+V29,Wicker bread basket,round,22,,NOT MEASURED,0
+V30,Deep rectangular pan,rect,26,20.5,NOT MEASURED,0
+V31,Small square insert pan,rect,16,16,NOT MEASURED,0
