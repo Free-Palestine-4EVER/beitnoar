@@ -40,7 +40,6 @@ function sanitizeMenuItems(items) {
                 p.video_poster_url = toRelativeStorageUrl(p.video_poster_url);
                 p.model_glb_url = toRelativeStorageUrl(p.model_glb_url);
                 p.model_usdz_url = toRelativeStorageUrl(p.model_usdz_url);
-                p.image_url = null;
                 p.video_poster_url = null;
             }
         }

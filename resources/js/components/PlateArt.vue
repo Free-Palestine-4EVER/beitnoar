@@ -22,6 +22,16 @@
     ></video>
   </div>
 
+  <div v-else-if="cardMedia.type === 'image'" class="card-photo-wrap" :class="sizeClass">
+    <img
+      :src="cardMedia.src"
+      :alt="product.name_en || 'Product photo'"
+      loading="lazy"
+      decoding="async"
+      class="card-photo-image"
+    >
+  </div>
+
   <!-- Products without video use the generated plate artwork. -->
   <div v-else class="pl" :class="sizeClass">
     <div class="shadow"></div>
@@ -331,6 +341,13 @@ const direction = rng() > 0.5 ? 'normal' : 'reverse';
   object-fit: cover;
   display: block;
   pointer-events: none;
+}
+.card-photo-image {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  display: block;
 }
 
 .card-photo-fallback {

@@ -24,6 +24,7 @@ for (const file of [
 
 copy('public/build', 'build');
 copy('public/icons', 'icons');
+copy('vercel-preview/storage/products/optimized/images', 'storage/products/optimized/images');
 copy('vercel-preview/storage/products/optimized/videos', 'storage/products/optimized/videos');
 copy('vercel-preview/generated/menu/version.json', 'generated/menu/version.json');
 
@@ -33,7 +34,6 @@ const menu = JSON.parse(readFileSync(menuPath, 'utf8'));
 function removeArModels(categories) {
     for (const category of categories) {
         for (const product of category.products ?? []) {
-            product.image_url = null;
             product.video_poster_url = null;
             product.ar_enabled = false;
             product.has_ar = false;
