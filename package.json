@@ -22,8 +22,8 @@
     },
     "dependencies": {
         "@google/model-viewer": "^4.3.1",
-        "@vitejs/plugin-vue": "^5.2.4",
-        "three": "^0.185.1",
+        "@vitejs/plugin-vue": "^6.0.9",
+        "three": "^0.183.0",
         "vue": "^3.5.42",
         "vue-router": "^4.6.4"
     }
