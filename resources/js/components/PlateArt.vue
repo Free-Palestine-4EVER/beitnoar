@@ -75,12 +75,10 @@ const videoRef = ref(null);
 const videoError = ref(false);
 const videoReady = ref(false);
 const prefersReducedMotion = ref(false);
-const isIntersecting = ref(false);
 const isVisible = ref(false);
 const videoLoaded = ref(false);
 const videoSrc = ref(null);
 let observer = null;
-let visibilityObserver = null;
 let visibilityHandler = null;
 let motionQuery = null;
 let videoLease = null;
@@ -105,7 +103,7 @@ const pauseVideoPlayback = () => {
 };
 
 const loadVideoSource = async () => {
-  if (!props.active || !isIntersecting.value || videoError.value) return;
+  if (videoError.value) return;
 
   if (videoLoaded.value && videoSrc.value) {
     const player = videoRef.value;
@@ -119,9 +117,8 @@ const loadVideoSource = async () => {
   const requestId = ++videoRequestId;
   try {
     const lease = await acquireSharedVideoSource(cardMedia.value.src);
-    if (requestId !== videoRequestId || !props.active || !isIntersecting.value) {
+    if (requestId !== videoRequestId) {
       lease.release();
-      if (requestId === videoRequestId) videoLoaded.value = false;
       return;
     }
 
@@ -140,7 +137,7 @@ const loadVideoSource = async () => {
       videoRetryCount += 1;
       retryTimer = setTimeout(() => {
         retryTimer = null;
-        if (requestId !== videoRequestId || !props.active || !isIntersecting.value) return;
+        if (requestId !== videoRequestId) return;
         loadVideoSource();
       }, 400 * videoRetryCount);
       return;
@@ -234,26 +231,6 @@ const setupObserver = (el) => {
     observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          isIntersecting.value = entry.isIntersecting;
-          if (entry.isIntersecting && props.active) {
-            loadVideoSource();
-          } else {
-            if (!entry.isIntersecting) isVisible.value = false;
-            // Keep the URL and buffered bytes attached so scrolling back does
-            // not restart the network request from byte zero.
-            pauseVideoPlayback();
-          }
-        });
-      },
-      {
-        rootMargin: '400px 0px',
-        threshold: 0,
-      }
-    );
-
-    visibilityObserver = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
           isVisible.value = entry.isIntersecting && entry.intersectionRatio >= 0.2;
           if (isVisible.value && props.active) {
             loadVideoSource();
@@ -264,24 +241,20 @@ const setupObserver = (el) => {
       },
       { threshold: 0.2 }
     );
-
     observer.observe(el);
-    visibilityObserver.observe(el);
   } else {
-    isIntersecting.value = true;
     isVisible.value = true;
-    loadVideoSource();
   }
+
+  // Fetch the complete clip as soon as this product card mounts, whether or
+  // not it is close to the viewport. Playback remains visibility-aware.
+  loadVideoSource();
 };
 
 const cleanupObserver = () => {
   if (observer) {
     observer.disconnect();
     observer = null;
-  }
-  if (visibilityObserver) {
-    visibilityObserver.disconnect();
-    visibilityObserver = null;
   }
   if (videoRef.value) {
     videoRef.value.pause();
@@ -293,13 +266,12 @@ const cleanupObserver = () => {
 };
 
 watch(() => props.active, (active) => {
-  const player = videoRef.value;
   if (!active) {
     pauseVideoPlayback();
     return;
   }
 
-  if (isIntersecting.value) loadVideoSource();
+  if (isVisible.value) loadVideoSource();
 }, { flush: 'post' });
 
 watch(videoRef, (newEl, oldEl) => {
@@ -323,7 +295,7 @@ onMounted(() => {
     if (videoRef.value) {
       if (document.hidden) {
         videoRef.value.pause();
-      } else if (props.active && isIntersecting.value && !prefersReducedMotion.value) {
+      } else if (props.active && isVisible.value && !prefersReducedMotion.value) {
         videoRef.value.play().catch(() => {});
       }
     }
@@ -343,7 +315,7 @@ function onMotionPreferenceChange(event) {
   prefersReducedMotion.value = event.matches;
   if (event.matches) {
     videoRef.value?.pause();
-  } else if (props.active && isIntersecting.value) {
+  } else if (props.active && isVisible.value) {
     loadVideoSource();
   }
 }
