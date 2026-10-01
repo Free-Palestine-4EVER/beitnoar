@@ -236,8 +236,6 @@ let visibilityHandler = null;
 let arNoticeTimeout = null;
 let modelViewerScriptPromise = null;
 let detailVideoLease = null;
-let detailVideoRetryCount = 0;
-let detailVideoRetryTimer = null;
 
 const hasAr = computed(() => Boolean(product.value?.ar_enabled && product.value?.model_glb_url));
 
@@ -252,9 +250,6 @@ const svgContent = computed(() => {
 const isVideoActive = computed(() => hasProductVideo(product.value) && !videoError.value);
 const showPlayOverlay = computed(() => isVideoActive.value && videoReady.value && isPaused.value);
 watch(() => product.value?.video_url, (source, _previous, onCleanup) => {
-  clearTimeout(detailVideoRetryTimer);
-  detailVideoRetryTimer = null;
-  detailVideoRetryCount = 0;
   detailVideoLease?.release();
   detailVideoLease = null;
   videoSrc.value = null;
@@ -265,13 +260,11 @@ watch(() => product.value?.video_url, (source, _previous, onCleanup) => {
   let cancelled = false;
   onCleanup(() => {
     cancelled = true;
-    clearTimeout(detailVideoRetryTimer);
-    detailVideoRetryTimer = null;
     detailVideoLease?.release();
     detailVideoLease = null;
   });
 
-  acquireSharedVideoSource(source).then((lease) => {
+  acquireSharedVideoSource(source, { priority: true }).then((lease) => {
     if (cancelled) {
       lease.release();
       return;
@@ -281,10 +274,8 @@ watch(() => product.value?.video_url, (source, _previous, onCleanup) => {
     nextTick(startVideoPlayback);
   }).catch((error) => {
     if (cancelled) return;
-    // Keep the dish playable if its streaming URL cannot be resolved.
-    console.warn('Could not prepare the product video source; using the original URL.', error);
-    videoSrc.value = source;
-    nextTick(startVideoPlayback);
+    console.error('Product detail video download failed:', error);
+    videoError.value = true;
   });
 }, { immediate: true });
 
@@ -352,27 +343,9 @@ const handleVideoError = (event) => {
   const failedSource = event.currentTarget?.currentSrc;
   if (failedSource && failedSource !== videoSrc.value) return;
 
-  console.warn('Product video playback failed; retrying its source:', event);
+  console.error('Product detail video could not be played:', event);
   videoReady.value = false;
   isPaused.value = true;
-
-  // iOS may evict a paused decoder after backgrounding. Retry the source before
-  // switching away from the video presentation.
-  if (detailVideoRetryCount < 2 && videoRef.value) {
-    const source = videoSrc.value;
-    detailVideoRetryCount += 1;
-    detailVideoRetryTimer = setTimeout(() => {
-      detailVideoRetryTimer = null;
-      const video = videoRef.value;
-      if (!video || videoSrc.value !== source) return;
-      video.load();
-      if (props.active && !document.hidden && !prefersReducedMotion.value && !isPausedByUser.value) {
-        startVideoPlayback();
-      }
-    }, 400 * detailVideoRetryCount);
-    return;
-  }
-
   detailVideoLease?.release();
   detailVideoLease = null;
   videoSrc.value = null;
@@ -383,7 +356,6 @@ const handleVideoPlay = () => {
   videoReady.value = true;
   videoStarted.value = true;
   isPaused.value = false;
-  detailVideoRetryCount = 0;
 };
 
 const togglePlayPause = () => {

@@ -44,7 +44,7 @@
 import { computed, ref, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { plateSVG, rngOf } from '../utils/plateArt';
 import { getProductCardMedia } from '../utils/productMedia';
-import { acquireSharedVideoSource } from '../utils/sharedVideoSource';
+import { acquireSharedVideoSource, prioritizeSharedVideoSource } from '../utils/sharedVideoSource';
 
 const props = defineProps({
   product: {
@@ -70,53 +70,50 @@ const props = defineProps({
 });
 
 const sizeClass = computed(() => props.size);
+const cardMedia = computed(() => getProductCardMedia(props.product));
 
 const videoRef = ref(null);
 const videoError = ref(false);
 const videoReady = ref(false);
 const prefersReducedMotion = ref(false);
 const isVisible = ref(false);
-const videoLoaded = ref(false);
 const videoSrc = ref(null);
 let observer = null;
 let visibilityHandler = null;
 let motionQuery = null;
 let videoLease = null;
 let videoRequestId = 0;
-let videoRetryCount = 0;
-let retryTimer = null;
-
-const releaseVideoSource = () => {
-  if (retryTimer) {
-    clearTimeout(retryTimer);
-    retryTimer = null;
-  }
-  videoLease?.release();
-  videoLease = null;
-  videoSrc.value = null;
-  videoLoaded.value = false;
-  videoReady.value = false;
-};
+let requestedSource = null;
 
 const pauseVideoPlayback = () => {
   videoRef.value?.pause();
 };
 
-const loadVideoSource = async () => {
-  if (videoError.value) return;
+const playVideoWhenReady = () => {
+  const player = videoRef.value;
+  if (!player || !videoSrc.value) return;
+  player.muted = true;
+  if (props.active && isVisible.value && !document.hidden && !prefersReducedMotion.value) {
+    player.play().catch(() => {});
+  } else {
+    player.pause();
+  }
+};
 
-  if (videoLoaded.value && videoSrc.value) {
-    const player = videoRef.value;
-    if (player && isVisible.value && player.paused && !document.hidden && !prefersReducedMotion.value) {
-      player.play().catch(() => {});
-    }
+const loadVideoSource = async (priority = false) => {
+  const source = cardMedia.value.src;
+  if (!source || videoError.value) return;
+
+  if (requestedSource === source) {
+    if (priority) prioritizeSharedVideoSource(source);
+    playVideoWhenReady();
     return;
   }
 
-  videoLoaded.value = true;
+  requestedSource = source;
   const requestId = ++videoRequestId;
   try {
-    const lease = await acquireSharedVideoSource(cardMedia.value.src);
+    const lease = await acquireSharedVideoSource(source, { priority });
     if (requestId !== videoRequestId) {
       lease.release();
       return;
@@ -125,65 +122,47 @@ const loadVideoSource = async () => {
     videoLease = lease;
     videoSrc.value = lease.src;
     await nextTick();
-    const player = videoRef.value;
-    if (player && isVisible.value && !document.hidden && !prefersReducedMotion.value) {
-      player.play().catch(() => {});
-    }
+    playVideoWhenReady();
   } catch (error) {
     if (requestId !== videoRequestId) return;
-    videoLoaded.value = false;
-    console.warn('Card video failed to load:', error);
-    if (videoRetryCount < 2) {
-      videoRetryCount += 1;
-      retryTimer = setTimeout(() => {
-        retryTimer = null;
-        if (requestId !== videoRequestId) return;
-        loadVideoSource();
-      }, 400 * videoRetryCount);
-      return;
-    }
+    console.error(`Could not load product video for ${props.product?.id ?? 'unknown product'}:`, error);
     videoError.value = true;
   }
 };
 
-watch(() => props.product?.id, () => {
+const resetVideo = () => {
   videoRequestId += 1;
-  releaseVideoSource();
+  videoLease?.release();
+  videoLease = null;
+  requestedSource = null;
+  videoSrc.value = null;
+  videoReady.value = false;
   videoError.value = false;
-  videoRetryCount = 0;
-  nextTick(loadVideoSource);
-});
+  nextTick(() => loadVideoSource(isVisible.value));
+};
 
-const cardMedia = computed(() => getProductCardMedia(props.product));
+watch(() => cardMedia.value.src, resetVideo);
 
 const handleVideoReady = (event) => {
-  if (!videoSrc.value || event.currentTarget.currentSrc !== videoSrc.value) return;
+  if (!videoSrc.value) return;
+  const currentSource = event.currentTarget.currentSrc;
+  if (currentSource && currentSource !== videoSrc.value) return;
   videoReady.value = true;
+  playVideoWhenReady();
 };
 
 const handleVideoPlaying = (event) => {
-  if (!videoSrc.value || event.currentTarget.currentSrc !== videoSrc.value) return;
+  if (!videoSrc.value) return;
+  const currentSource = event.currentTarget.currentSrc;
+  if (currentSource && currentSource !== videoSrc.value) return;
   videoReady.value = true;
-  videoRetryCount = 0;
 };
 
 const handleCardVideoPause = (event) => {
   const player = event.currentTarget;
-  if (
-    !props.active || !isVisible.value || document.hidden ||
-    prefersReducedMotion.value || videoError.value || player.error
-  ) return;
-
-  // There are no card playback controls; a foreground-visible card should
-  // keep animating if mobile Safari pauses it during idle or memory pressure.
-  requestAnimationFrame(() => {
-    if (
-      props.active && isVisible.value && !document.hidden &&
-      !prefersReducedMotion.value && !videoError.value && !player.error && player.paused
-    ) {
-      player.play().catch(() => {});
-    }
-  });
+  if (props.active && isVisible.value && !document.hidden && !prefersReducedMotion.value && !player.error) {
+    requestAnimationFrame(playVideoWhenReady);
+  }
 };
 
 const svgContent = computed(() => {
@@ -192,32 +171,12 @@ const svgContent = computed(() => {
 });
 
 const handleVideoError = (event) => {
-  // Removing/changing a source can dispatch a delayed error for the old URL.
-  // Ignore it so it cannot mark the next card source as permanently broken.
   if (!videoSrc.value) return;
   const failedSource = event.currentTarget?.currentSrc;
   if (failedSource && failedSource !== videoSrc.value) return;
 
-  console.warn('Card video failed to load:', event);
+  console.error(`Product video could not be played for ${props.product?.id ?? 'unknown product'}:`, event);
   videoReady.value = false;
-
-  // Mobile Safari can evict a paused decoder after backgrounding or memory
-  // pressure. Retry the same source before hiding the video card.
-  if (videoRetryCount < 2 && videoRef.value) {
-    const requestId = videoRequestId;
-    videoRetryCount += 1;
-    retryTimer = setTimeout(() => {
-      retryTimer = null;
-      if (requestId !== videoRequestId || !videoSrc.value || !videoRef.value) return;
-      videoRef.value.load();
-      if (!document.hidden && !prefersReducedMotion.value) {
-        videoRef.value.play().catch(() => {});
-      }
-    }, 400 * videoRetryCount);
-    return;
-  }
-
-  releaseVideoSource();
   videoError.value = true;
 };
 
@@ -233,7 +192,7 @@ const setupObserver = (el) => {
         entries.forEach((entry) => {
           isVisible.value = entry.isIntersecting && entry.intersectionRatio >= 0.2;
           if (isVisible.value && props.active) {
-            loadVideoSource();
+            loadVideoSource(true);
           } else {
             pauseVideoPlayback();
           }
@@ -246,9 +205,9 @@ const setupObserver = (el) => {
     isVisible.value = true;
   }
 
-  // Fetch the complete clip as soon as this product card mounts, whether or
-  // not it is close to the viewport. Playback remains visibility-aware.
-  loadVideoSource();
+  // Queue every card's complete video immediately. Visible clips move to the
+  // front of the shared queue; offscreen clips continue downloading as well.
+  loadVideoSource(isVisible.value);
 };
 
 const cleanupObserver = () => {
@@ -262,7 +221,8 @@ const cleanupObserver = () => {
     videoRef.value.load();
   }
   videoRequestId += 1;
-  releaseVideoSource();
+  videoLease?.release();
+  videoLease = null;
 };
 
 watch(() => props.active, (active) => {
@@ -271,13 +231,14 @@ watch(() => props.active, (active) => {
     return;
   }
 
-  if (isVisible.value) loadVideoSource();
+  if (isVisible.value) playVideoWhenReady();
 }, { flush: 'post' });
 
 watch(videoRef, (newEl, oldEl) => {
-  if (oldEl && observer) {
-    observer.disconnect();
+  if (oldEl) {
+    observer?.disconnect();
     observer = null;
+    oldEl.pause();
   }
   if (newEl) {
     setupObserver(newEl);
@@ -296,7 +257,7 @@ onMounted(() => {
       if (document.hidden) {
         videoRef.value.pause();
       } else if (props.active && isVisible.value && !prefersReducedMotion.value) {
-        videoRef.value.play().catch(() => {});
+        playVideoWhenReady();
       }
     }
   };
@@ -316,7 +277,7 @@ function onMotionPreferenceChange(event) {
   if (event.matches) {
     videoRef.value?.pause();
   } else if (props.active && isVisible.value) {
-    loadVideoSource();
+    playVideoWhenReady();
   }
 }
 
