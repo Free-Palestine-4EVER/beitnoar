@@ -98,15 +98,8 @@ const releaseVideoSource = () => {
   videoReady.value = false;
 };
 
-const unloadVideoSource = () => {
-  videoRequestId += 1;
-  const player = videoRef.value;
-  player?.pause();
-  if (player) {
-    player.removeAttribute('src');
-    player.load();
-  }
-  releaseVideoSource();
+const pauseVideoPlayback = () => {
+  videoRef.value?.pause();
 };
 
 const loadVideoSource = async () => {
@@ -243,7 +236,9 @@ const setupObserver = (el) => {
           if (entry.isIntersecting && props.active) {
             loadVideoSource();
           } else {
-            unloadVideoSource();
+            // Keep the URL and buffered bytes attached so scrolling back does
+            // not restart the network request from byte zero.
+            pauseVideoPlayback();
           }
         });
       },
@@ -277,7 +272,7 @@ const cleanupObserver = () => {
 watch(() => props.active, (active) => {
   const player = videoRef.value;
   if (!active) {
-    unloadVideoSource();
+    pauseVideoPlayback();
     return;
   }
 
