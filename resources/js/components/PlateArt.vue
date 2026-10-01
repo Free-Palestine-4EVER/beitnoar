@@ -10,7 +10,7 @@
       muted
       loop
       playsinline
-      preload="none"
+      preload="auto"
       class="card-photo-video"
       :class="{ 'is-ready': videoReady }"
       :aria-label="product.name_en || 'Product video'"
@@ -76,9 +76,11 @@ const videoError = ref(false);
 const videoReady = ref(false);
 const prefersReducedMotion = ref(false);
 const isIntersecting = ref(false);
+const isVisible = ref(false);
 const videoLoaded = ref(false);
 const videoSrc = ref(null);
 let observer = null;
+let visibilityObserver = null;
 let visibilityHandler = null;
 let motionQuery = null;
 let videoLease = null;
@@ -107,7 +109,7 @@ const loadVideoSource = async () => {
 
   if (videoLoaded.value && videoSrc.value) {
     const player = videoRef.value;
-    if (player && player.paused && !document.hidden && !prefersReducedMotion.value) {
+    if (player && isVisible.value && player.paused && !document.hidden && !prefersReducedMotion.value) {
       player.play().catch(() => {});
     }
     return;
@@ -127,7 +129,7 @@ const loadVideoSource = async () => {
     videoSrc.value = lease.src;
     await nextTick();
     const player = videoRef.value;
-    if (player && !document.hidden && !prefersReducedMotion.value) {
+    if (player && isVisible.value && !document.hidden && !prefersReducedMotion.value) {
       player.play().catch(() => {});
     }
   } catch (error) {
@@ -171,7 +173,7 @@ const handleVideoPlaying = (event) => {
 const handleCardVideoPause = (event) => {
   const player = event.currentTarget;
   if (
-    !props.active || !isIntersecting.value || document.hidden ||
+    !props.active || !isVisible.value || document.hidden ||
     prefersReducedMotion.value || videoError.value || player.error
   ) return;
 
@@ -179,7 +181,7 @@ const handleCardVideoPause = (event) => {
   // keep animating if mobile Safari pauses it during idle or memory pressure.
   requestAnimationFrame(() => {
     if (
-      props.active && isIntersecting.value && !document.hidden &&
+      props.active && isVisible.value && !document.hidden &&
       !prefersReducedMotion.value && !videoError.value && !player.error && player.paused
     ) {
       player.play().catch(() => {});
@@ -236,6 +238,7 @@ const setupObserver = (el) => {
           if (entry.isIntersecting && props.active) {
             loadVideoSource();
           } else {
+            if (!entry.isIntersecting) isVisible.value = false;
             // Keep the URL and buffered bytes attached so scrolling back does
             // not restart the network request from byte zero.
             pauseVideoPlayback();
@@ -243,14 +246,30 @@ const setupObserver = (el) => {
         });
       },
       {
-        rootMargin: '60px 0px',
-        threshold: 0.2,
+        rootMargin: '400px 0px',
+        threshold: 0,
       }
     );
 
+    visibilityObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          isVisible.value = entry.isIntersecting && entry.intersectionRatio >= 0.2;
+          if (isVisible.value && props.active) {
+            loadVideoSource();
+          } else {
+            pauseVideoPlayback();
+          }
+        });
+      },
+      { threshold: 0.2 }
+    );
+
     observer.observe(el);
+    visibilityObserver.observe(el);
   } else {
     isIntersecting.value = true;
+    isVisible.value = true;
     loadVideoSource();
   }
 };
@@ -259,6 +278,10 @@ const cleanupObserver = () => {
   if (observer) {
     observer.disconnect();
     observer = null;
+  }
+  if (visibilityObserver) {
+    visibilityObserver.disconnect();
+    visibilityObserver = null;
   }
   if (videoRef.value) {
     videoRef.value.pause();
